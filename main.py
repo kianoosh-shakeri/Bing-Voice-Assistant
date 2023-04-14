@@ -101,7 +101,7 @@ def speak(text: str, blocking: bool = True):
 
 async def get_trigger(source: sr.Microphone):
 	global bot
-	play_audio("sounds/msgtest.wav", True)
+	play_audio("sounds/get_trigger.wav", True)
 	while True:
 		try:
 			#speak("Say, Hay richard")
@@ -112,7 +112,7 @@ async def get_trigger(source: sr.Microphone):
 				audio = recognizer.listen(source, 4)
 			except sr.exceptions.WaitTimeoutError:
 				continue
-			play_audio("sounds/msginfo.wav")
+			play_audio("sounds/processing.wav")
 			try:
 				with open("audio.wav", "wb") as f:
 					f.write(audio.get_wav_data())
@@ -126,7 +126,7 @@ async def get_trigger(source: sr.Microphone):
 					spoken_sentence, processed_sentence = get_wake_sentence(phrase=phrase)
 				except (ValueError, TypeError):
 					#Play the get trigger audio so the user knows they can speak
-					play_audio("sounds/msgtest.wav")
+					play_audio("sounds/get_trigger.wav")
 					continue
 				if processed_sentence != ():
 					spoken_sentence = strip_wake_sentence(spoken_sentence)
@@ -146,7 +146,7 @@ async def get_trigger(source: sr.Microphone):
 							break
 						else:
 							#Play the get trigger audio so the user knows they can speak
-							play_audio("sounds/msgtest.wav")
+							play_audio("sounds/get_trigger.wav")
 			except Exception as e:
 				print("Error transcribing audio: {0}".format(e))
 				continue
@@ -162,7 +162,7 @@ async def main():
 		while True:
 			try:
 				#recognizer.energy_threshold = 300
-				play_audio("sounds/msgalert.wav", True)
+				play_audio("sounds/prompt.wav", True)
 				
 				try:
 					audio = recognizer.listen(source, 5)
@@ -170,7 +170,7 @@ async def main():
 					await get_trigger(source)
 					continue
 
-				play_audio("sounds/msginfo.wav")
+				play_audio("sounds/processing.wav")
 				try:
 					with open("audio_prompt.wav", "wb") as f:
 						f.write(audio.get_wav_data())
@@ -192,7 +192,7 @@ async def main():
 				await quit()
 
 async def get_response(user_input: str) -> str:
-	play_audio("sounds/msgsent.wav")
+	play_audio("sounds/requesting.wav")
 	response = await bot.ask(prompt=user_input, conversation_style=ConversationStyle.precise)
 	for message in response["item"]["messages"]:
 		if message["author"] == "bot":

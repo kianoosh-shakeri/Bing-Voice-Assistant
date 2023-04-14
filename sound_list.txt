@@ -1,0 +1,4 @@
+sounds/get_trigger.wav: Played when the app is waiting for the wake up sentence.
+sounds/processing.wav: Played when the app is processing speech.
+sounds/prompt.wav: Played when app is asking for a prompt to ask bing.
+sounds/requesting.wav: Played when the app began prompting bing.

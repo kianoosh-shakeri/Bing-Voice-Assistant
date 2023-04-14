@@ -17,4 +17,4 @@ You can also provide a prompt without waiting for the app to ask you for it. Jus
 
 ## Credits
 - This project was originally forked from [Ai-Austin/Bing-GPT-Voice-Assistant](https://github.com/Ai-Austin/Bing-GPT-Voice-Assistant)
-- Further additions, improvements and enhancements, optimizations, removal and replacement of paid services with free alternatives has been my work.
+- Further additions, improvements and enhancements, optimizations, removal and replacement of paid services with free alternatives has been done by [Sonorous Arts](https://github.com/sonorous-arts/).

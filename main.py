@@ -2,6 +2,7 @@ import sys
 import time
 import os
 import string
+from rapidfuzz import fuzz, process
 #from TTS.api import TTS
 import pyttsx3
 import asyncio
@@ -36,17 +37,15 @@ def clean_str(text: str) -> str:
 	return text
 
 def get_wake_sentence(phrase: str) -> tuple:
-	"""Goes through the wake_sentence list and checks if it can find all the elements in the spoken phrase.
+	"""Checks the spoken phrase against wake_sentence.
 	Returns the spoken phrase, if the assessment passes, so that later it can be used for prompting the bot without waiting."""
 	
 	if phrase == "": return None
-	tempphrase = clean_str(phrase)
-	if len(tempphrase) < len(wake_sentence): return None
-	if tempphrase.startswith(wake_sentence.lower()):
-		#We need the cleaned up string, so we return tempphrase instead of phrase to avoid executing clean_str twice.
-		return (phrase, tempphrase)
+	ratio = fuzz.ratio(wake_sentence, phrase[0:len(wake_sentence)])
+	if ratio >= 70:
+		return (phrase, ratio)
 	else:
-		speak("I heard, " + phrase +". Which is not a wake up word for me.")
+		speak("I heard, " + phrase[0:len(wake_sentence)] +". Which is not a wake up word for me.")
 		return ()
 
 def strip_punctuation(text: str) -> str:
@@ -123,13 +122,13 @@ async def get_trigger(source: sr.Microphone):
 
 
 				try:
-					spoken_sentence, processed_sentence = get_wake_sentence(phrase=phrase)
+					spoken_sentence, ratio = get_wake_sentence(phrase=phrase)
 				except (ValueError, TypeError):
 					#Play the get trigger audio so the user knows they can speak
 					play_audio("sounds/get_trigger.wav")
 					continue
-				if processed_sentence != ():
-					spoken_sentence = strip_wake_sentence(spoken_sentence)
+				processed_sentence = clean_str(spoken_sentence)
+				if processed_sentence != "":
 					processed_sentence = strip_wake_sentence(processed_sentence)
 					if processed_sentence == "":
 						break
@@ -140,6 +139,7 @@ async def get_trigger(source: sr.Microphone):
 						break
 					else:
 						#Something is spoken after the wake up sentence, so we are going to ask about it from bing.
+						spoken_sentence = strip_wake_sentence(spoken_sentence)
 						response_params = process_response(await get_response(spoken_sentence))
 						if response_params["question"]:
 							#A question is asked, so move back to main to get a prompt.

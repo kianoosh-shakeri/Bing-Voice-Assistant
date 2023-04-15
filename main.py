@@ -45,7 +45,7 @@ def get_wake_sentence(phrase: str) -> tuple:
 	if ratio >= 70:
 		return (phrase, ratio)
 	else:
-		speak("I heard, " + phrase[0:len(wake_sentence)] +". Which is not a wake up word for me.")
+		speak("I heard, " + phrase +". Which is not a wake up word for me.")
 		return ()
 
 def strip_punctuation(text: str) -> str:
@@ -132,7 +132,7 @@ async def get_trigger(source: sr.Microphone):
 					processed_sentence = strip_wake_sentence(processed_sentence)
 					if processed_sentence == "":
 						break
-					elif processed_sentence == "new topic":
+					elif fuzz.ratio(processed_sentence, "new topic") >= 70:
 						bot = Chatbot(cookiePath="cookies.json")
 						#Announce that there's going to be a new topic from now on so that user won't continue the last one.
 						speak("New topic. What can I do for you?")
@@ -177,7 +177,7 @@ async def main():
 					result = model.transcribe("audio_prompt.wav")
 					os.remove("audio_prompt.wav")
 					user_input = result["text"]
-					if clean_str(user_input) == "new topic":
+					if fuzz.ratio(user_input, "new topic") >= 70:
 						bot = Chatbot(cookiePath="cookies.json")
 						speak("New topic. What can I do for you?")
 						continue

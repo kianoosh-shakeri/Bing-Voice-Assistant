@@ -4,12 +4,13 @@ import os
 import string
 from rapidfuzz import fuzz, process
 #from TTS.api import TTS
-import pyttsx3
+from gtts.tts import gTTS
+import pydub
+from pydub import playback
 import asyncio
 import threading
 import re
 import whisper
-import winsound
 import speech_recognition as sr
 
 from EdgeGPT import Chatbot, ConversationStyle
@@ -19,8 +20,6 @@ recognizer = sr.Recognizer()
 wake_sentence = "Hey Bing"
 
 #Initialize TTS
-tts = pyttsx3.init()
-tts.startLoop(False)
 #tts = TTS(model_name="tts_models/en/ljspeech/fast_pitch", model_path = ".cache/TTS/fast_pitch/model_file.pth", config_path = ".cache/TTS/fast_pitch/config.json", vocoder_path=".cache/TTS/vocoder_hifigan_v2/model_file.pth", vocoder_config_path=".cache/TTS/vocoder_hifigan_v2/config.json")
 
 model = whisper.load_model("base", download_root = '.cache/whisper/')
@@ -78,29 +77,31 @@ def strip_wake_sentence(spoken_sentence: str) -> str:
 	spoken_sentence = spoken_sentence.lstrip()
 	return spoken_sentence
 
+def _load_play_audio(file: str):
+	"""Loads and plays an audio file. Must be seprated from the `play_audio` function, so that both loading and playing procedure can be in one single thread. Otherwise, the none blocking mode will not work."""
+	sounddata = pydub.AudioSegment.from_file(file, format=file.split(".")[-1])
+	playback.play(sounddata)
+
 def play_audio(file: str, blocking: bool = False):
-	"""Plays a file with winsound
-	Blocking and none blocking modes both work fine, except winsound cannot play two sounds simultaneously. So playing two sounds in succession will play them one after the other, but doesn't block the main loop of the application and anything passed play_audio is executed instantly after the call."""
-	with open(file, "rb") as f:
-		snddata = f.read()
+	"""Plays an audio file.
+	In order for the none blocking mode to work, the actual logic of loading and playing sounds is moved to the `_load_play_audio` function. If loading and playing of audio files are seprated in different threads, the none blocking mode will not work as expected"""
 	if blocking:
-		winsound.PlaySound(snddata, winsound.SND_MEMORY)
+		_load_play_audio(file)
 	else:
-		#Winsound cannot play sounds from memory in winsound.SND_ASYNC mode, so we need to spawn a thread to make it not block the application.
-		t = threading.Thread(target=winsound.PlaySound, args=[snddata, winsound.SND_MEMORY])
+		t = threading.Thread(target=_load_play_audio, args=[file])
 		t.daemon = True
 		t.start()
 
 def speak(text: str, blocking: bool = True):
-	#tts.tts_to_file(text, speed=2.0, file_path="tts_output.wav")
-	tts.save_to_file(text=text, filename="tts_output.wav")
-	tts.iterate()
-	play_audio("tts_output.wav", blocking=blocking)
-	os.remove("tts_output.wav")
+	#tts.tts_to_file(text, speed=2.0, file_path="tts_output.mp3")
+	speech = gTTS(text=text, tld="ca")
+	speech.save("tts_output.mp3")
+	play_audio("tts_output.mp3", blocking=blocking)
+	os.remove("tts_output.mp3")
 
 async def get_trigger(source: sr.Microphone):
 	global bot
-	play_audio("sounds/get_trigger.wav", True)
+	play_audio("sounds/get_trigger.mp3", True)
 	while True:
 		try:
 			#speak("Say, Hay richard")
@@ -111,13 +112,13 @@ async def get_trigger(source: sr.Microphone):
 				audio = recognizer.listen(source, 4)
 			except sr.exceptions.WaitTimeoutError:
 				continue
-			play_audio("sounds/processing.wav")
+			play_audio("sounds/processing.mp3")
 			try:
-				with open("audio.wav", "wb") as f:
+				with open("audio.mp3", "wb") as f:
 					f.write(audio.get_wav_data())
 				
-				result = model.transcribe("audio.wav", initial_prompt = "Hey Richard")
-				os.remove("audio.wav")
+				result = model.transcribe("audio.mp3", initial_prompt = "Hey Richard")
+				os.remove("audio.mp3")
 				phrase = result["text"]
 
 
@@ -125,7 +126,7 @@ async def get_trigger(source: sr.Microphone):
 					spoken_sentence, ratio = get_wake_sentence(phrase=phrase)
 				except (ValueError, TypeError):
 					#Play the get trigger audio so the user knows they can speak
-					play_audio("sounds/get_trigger.wav")
+					play_audio("sounds/get_trigger.mp3")
 					continue
 				processed_sentence = clean_str(spoken_sentence)
 				if processed_sentence != "":
@@ -146,7 +147,7 @@ async def get_trigger(source: sr.Microphone):
 							break
 						else:
 							#Play the get trigger audio so the user knows they can speak
-							play_audio("sounds/get_trigger.wav")
+							play_audio("sounds/get_trigger.mp3")
 			except Exception as e:
 				print("Error transcribing audio: {0}".format(e))
 				continue
@@ -162,7 +163,7 @@ async def main():
 		while True:
 			try:
 				#recognizer.energy_threshold = 300
-				play_audio("sounds/prompt.wav", True)
+				play_audio("sounds/prompt.mp3", True)
 				
 				try:
 					audio = recognizer.listen(source, 5)
@@ -170,12 +171,12 @@ async def main():
 					await get_trigger(source)
 					continue
 
-				play_audio("sounds/processing.wav")
+				play_audio("sounds/processing.mp3")
 				try:
-					with open("audio_prompt.wav", "wb") as f:
+					with open("audio_prompt.mp3", "wb") as f:
 						f.write(audio.get_wav_data())
-					result = model.transcribe("audio_prompt.wav")
-					os.remove("audio_prompt.wav")
+					result = model.transcribe("audio_prompt.mp3")
+					os.remove("audio_prompt.mp3")
 					user_input = result["text"]
 					if fuzz.ratio(user_input, "new topic") >= 70:
 						bot = Chatbot(cookiePath="cookies.json")
@@ -192,7 +193,7 @@ async def main():
 				await quit()
 
 async def get_response(user_input: str) -> str:
-	play_audio("sounds/requesting.wav")
+	play_audio("sounds/requesting.mp3")
 	response = await bot.ask(prompt=user_input, conversation_style=ConversationStyle.precise)
 	for message in response["item"]["messages"]:
 		if message["author"] == "bot":

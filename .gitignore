@@ -136,3 +136,6 @@ dmypy.json
 
 # Local folders
 sounds/
+
+# Local files
+cookies.json

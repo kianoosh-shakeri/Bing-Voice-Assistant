@@ -2,6 +2,7 @@ import sys
 import time
 import os
 import string
+import json
 from rapidfuzz import fuzz, process
 #from TTS.api import TTS
 from gtts.tts import gTTS
@@ -23,9 +24,17 @@ wake_sentence = "Hey Bing"
 #tts = TTS(model_name="tts_models/en/ljspeech/fast_pitch", model_path = ".cache/TTS/fast_pitch/model_file.pth", config_path = ".cache/TTS/fast_pitch/config.json", vocoder_path=".cache/TTS/vocoder_hifigan_v2/model_file.pth", vocoder_config_path=".cache/TTS/vocoder_hifigan_v2/config.json")
 
 model = whisper.load_model("base", download_root = '.cache/whisper/')
+bot: Chatbot = None
+cookies: dict = {}
+with open("cookies.json", "r") as f:
+	cookies = json.load(f)
 
-#Creates an instance of Chatbot. Every time we need to start fresh (new topic), we have to create another instance of Chatbot.
-bot = Chatbot(cookiePath='cookies.json')
+def initialize_chat_bot():
+	"""Creates an instance of Chatbot."""
+	global bot
+	bot = Chatbot(cookies=cookies)
+
+initialize_chat_bot()
 
 def clean_str(text: str) -> str:
 	text = strip_emojis(text)
@@ -134,7 +143,7 @@ async def get_trigger(source: sr.Microphone):
 					if processed_sentence == "":
 						break
 					elif fuzz.ratio(processed_sentence, "new topic") >= 70:
-						bot = Chatbot(cookiePath="cookies.json")
+						await bot.reset()
 						#Announce that there's going to be a new topic from now on so that user won't continue the last one.
 						speak("New topic. What can I do for you?")
 						break
@@ -179,7 +188,7 @@ async def main():
 					os.remove("audio_prompt.mp3")
 					user_input = result["text"]
 					if fuzz.ratio(user_input, "new topic") >= 70:
-						bot = Chatbot(cookiePath="cookies.json")
+						await bot.reset()
 						speak("New topic. What can I do for you?")
 						continue
 				except Exception as e:
@@ -202,7 +211,7 @@ async def get_response(user_input: str) -> str:
 	bot_response = re.sub('\[\^\d+\^\]', '', bot_response)
 
 	"""
-	bot = Chatbot(cookiePath='cookies.json')
+	await bot.reset()
 	response = await bot.ask(prompt=user_input, conversation_style=ConversationStyle.creative)
 	# Select only the bot response from the response dictionary
 	for message in response["item"]["messages"]:

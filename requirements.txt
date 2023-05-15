@@ -1,4 +1,6 @@
+pyaudio
 pyttsx3
+gtts
 openai-whisper
 SpeechRecognition
 edgegpt

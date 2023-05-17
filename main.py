@@ -272,7 +272,8 @@ def process_response(response: str):
 async def quit():
 	print("exiting...")
 	if isinstance(bot, Bing):
-		await bot.close()
+		bot = None
+		await bing_bot.close()
 	sys.exit(0)
 
 if __name__ == "__main__":

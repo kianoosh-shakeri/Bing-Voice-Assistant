@@ -13,28 +13,70 @@ import threading
 import re
 import whisper
 import speech_recognition as sr
+from EdgeGPT import Chatbot as Bing, ConversationStyle
+from Bard import Chatbot as Bard
 
-from EdgeGPT import Chatbot, ConversationStyle
+bot = None
+bard_bot = None
+bing_bot = None
+bing_cookies: dict = {}
+try:
+	with open("cookies.json", "r") as f:
+		bing_cookies = json.load(f)
+except:
+	pass
+bard_token: str = ""
+try:
+	with open("bard.txt", "r") as f:
+		bard_token = f.read()
+except:
+	pass
+if not bard_token and not bing_cookies:
+	print("Couldn't find the required information for any of the supported services, exiting...")
+	sys.exit(0)
 
 recognizer = sr.Recognizer()
-#List of the words that trigger the application
-wake_sentence = "Hey Bing"
 
 #Initialize TTS
 #tts = TTS(model_name="tts_models/en/ljspeech/fast_pitch", model_path = ".cache/TTS/fast_pitch/model_file.pth", config_path = ".cache/TTS/fast_pitch/config.json", vocoder_path=".cache/TTS/vocoder_hifigan_v2/model_file.pth", vocoder_config_path=".cache/TTS/vocoder_hifigan_v2/config.json")
 
 model = whisper.load_model("base", download_root = '.cache/whisper/')
-bot: Chatbot = None
-cookies: dict = {}
-with open("cookies.json", "r") as f:
-	cookies = json.load(f)
 
 def initialize_chat_bot():
 	"""Creates an instance of Chatbot."""
-	global bot
-	bot = Chatbot(cookies=cookies)
+	global bing_bot, bard_bot
+	if bing_cookies:
+		try:
+			bing_bot = Bing(cookies=bing_cookies)
+			print("Using Bing Chat")
+		except Exception as e:
+			print(f"Couldn't initialize Bing Chat: {e}")
+	if bard_token:
+		try:
+			bard_bot = Bard(session_id=bard_token)
+			print("Using Google Bard")
+		except Exception as e:
+			print(f"Couldn't initialize Google Bard: {e}")
+	if not bing_bot and not bard_bot:
+		print("None of the services could be initialized. Exiting...")
+		sys.exit(0)
+
+async def reset_chat_bot():
+	global bing_bot, bard_bot, bot
+	if bot:
+		if isinstance(bot, Bing):
+			await bing_bot.reset()
+		elif isinstance(bot, Bard):
+			bard_bot = Bard(bard_token)
 
 initialize_chat_bot()
+
+# A list of dictionaries needed to trigger services.
+wake_list = [
+	{"sentence": "Hey Bing", "service": bing_bot},
+	{"sentence": "Hey Bard", "service": bard_bot},
+]
+current_wake_sentence: str = ""
 
 def clean_str(text: str) -> str:
 	text = strip_emojis(text)
@@ -47,14 +89,19 @@ def clean_str(text: str) -> str:
 def get_wake_sentence(phrase: str) -> tuple:
 	"""Checks the spoken phrase against wake_sentence.
 	Returns the spoken phrase, if the assessment passes, so that later it can be used for prompting the bot without waiting."""
-	
+	global bot, current_wake_sentence
 	if phrase == "": return None
-	ratio = fuzz.ratio(wake_sentence, phrase[0:len(wake_sentence)])
-	if ratio >= 70:
-		return (phrase, ratio)
-	else:
-		speak("I heard, " + phrase +". Which is not a wake up word for me.")
-		return ()
+	for wake_info in wake_list:
+		ratio = fuzz.ratio(wake_info["sentence"], phrase[0:len(wake_info["sentence"])])
+		if ratio >= 70:
+			if not wake_info["service"]:
+				speak("The chosen service has not been initialized")
+				return ()
+			current_wake_sentence = phrase[0:len(wake_info["sentence"])]
+			bot = wake_info["service"]
+			return (phrase, ratio)
+	speak("I heard, " + phrase +". Which is not a wake up word for me.")
+	return ()
 
 def strip_punctuation(text: str) -> str:
 	"""Strips all punctuation symbols from the given string"""
@@ -82,7 +129,7 @@ def is_question(text: str) -> bool:
 def strip_wake_sentence(spoken_sentence: str) -> str:
 	"""Strips wake_sentence from spoken_sentence and returns it"""
 	
-	spoken_sentence = spoken_sentence[len(wake_sentence):]
+	spoken_sentence = spoken_sentence[len(current_wake_sentence):]
 	spoken_sentence = spoken_sentence.lstrip()
 	return spoken_sentence
 
@@ -143,7 +190,7 @@ async def get_trigger(source: sr.Microphone):
 					if processed_sentence == "":
 						break
 					elif fuzz.ratio(processed_sentence, "new topic") >= 70:
-						await bot.reset()
+						await reset_chat_bot()
 						#Announce that there's going to be a new topic from now on so that user won't continue the last one.
 						speak("New topic. What can I do for you?")
 						break
@@ -188,7 +235,7 @@ async def main():
 					os.remove("audio_prompt.mp3")
 					user_input = result["text"]
 					if fuzz.ratio(user_input, "new topic") >= 70:
-						await bot.reset()
+						await reset_chat_bot()
 						speak("New topic. What can I do for you?")
 						continue
 				except Exception as e:
@@ -203,24 +250,16 @@ async def main():
 
 async def get_response(user_input: str) -> str:
 	play_audio("sounds/requesting.mp3")
-	response = await bot.ask(prompt=user_input, conversation_style=ConversationStyle.precise)
-	for message in response["item"]["messages"]:
-		if message["author"] == "bot":
-			bot_response = message["text"]
-
-	bot_response = re.sub('\[\^\d+\^\]', '', bot_response)
-
-	"""
-	await bot.reset()
-	response = await bot.ask(prompt=user_input, conversation_style=ConversationStyle.creative)
-	# Select only the bot response from the response dictionary
-	for message in response["item"]["messages"]:
-		if message["author"] == "bot":
-			bot_response = message["text"]
-	# Remove [^#^] citations in response
-	bot_response = re.sub('\[\^\d+\^\]', '', bot_response)
-	"""
-
+	bot_response = "Sorry, service returned no response"
+	if isinstance(bot, Bing):
+		result = await bot.ask(prompt=user_input, conversation_style=ConversationStyle.precise)
+		for message in result["item"]["messages"]:
+			if message["author"] == "bot":
+				bot_response = message["text"]
+		bot_response = re.sub('\[\^\d+\^\]', '', bot_response)
+	elif isinstance(bot, Bard):
+		result = bot.ask(user_input)
+		bot_response = result["content"]
 	return bot_response
 
 def process_response(response: str):
@@ -232,7 +271,8 @@ def process_response(response: str):
 
 async def quit():
 	print("exiting...")
-	await bot.close()
+	if isinstance(bot, Bing):
+		await bot.close()
 	sys.exit(0)
 
 if __name__ == "__main__":

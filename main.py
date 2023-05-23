@@ -1,5 +1,6 @@
 import sys
 import time
+import traceback
 import os
 import string
 import json
@@ -35,13 +36,6 @@ if not bard_token and not bing_cookies:
 	print("Couldn't find the required information for any of the supported services, exiting...")
 	sys.exit(0)
 
-recognizer = sr.Recognizer()
-
-#Initialize TTS
-#tts = TTS(model_name="tts_models/en/ljspeech/fast_pitch", model_path = ".cache/TTS/fast_pitch/model_file.pth", config_path = ".cache/TTS/fast_pitch/config.json", vocoder_path=".cache/TTS/vocoder_hifigan_v2/model_file.pth", vocoder_config_path=".cache/TTS/vocoder_hifigan_v2/config.json")
-
-model = whisper.load_model("base", download_root = '.cache/whisper/')
-
 def initialize_chat_bot():
 	"""Creates an instance of Chatbot."""
 	global bing_bot, bard_bot
@@ -70,6 +64,13 @@ async def reset_chat_bot():
 			bard_bot = Bard(bard_token)
 
 initialize_chat_bot()
+
+recognizer = sr.Recognizer()
+
+#Initialize TTS
+#tts = TTS(model_name="tts_models/en/ljspeech/fast_pitch", model_path = ".cache/TTS/fast_pitch/model_file.pth", config_path = ".cache/TTS/fast_pitch/config.json", vocoder_path=".cache/TTS/vocoder_hifigan_v2/model_file.pth", vocoder_config_path=".cache/TTS/vocoder_hifigan_v2/config.json")
+
+model = whisper.load_model("base", download_root = '.cache/whisper/')
 
 # A list of dictionaries needed to trigger services.
 wake_list = [
@@ -160,9 +161,6 @@ async def get_trigger(source: sr.Microphone):
 	play_audio("sounds/get_trigger.mp3", True)
 	while True:
 		try:
-			#speak("Say, Hay richard")
-			#
-
 			recognizer.energy_threshold = 1000
 			try:
 				audio = recognizer.listen(source, 4)
@@ -173,7 +171,7 @@ async def get_trigger(source: sr.Microphone):
 				with open("audio.mp3", "wb") as f:
 					f.write(audio.get_wav_data())
 				
-				result = model.transcribe("audio.mp3", initial_prompt = "Hey Richard")
+				result = model.transcribe("audio.mp3", initial_prompt = "Hey ")
 				os.remove("audio.mp3")
 				phrase = result["text"]
 
@@ -204,8 +202,21 @@ async def get_trigger(source: sr.Microphone):
 						else:
 							#Play the get trigger audio so the user knows they can speak
 							play_audio("sounds/get_trigger.mp3")
+			except IndexError:
+				speak("Your cookie information for Google Bard appears to be invalidated. Please renew the cookie value and restart the program. If you need help, take a look at the read me file.")
+				#Play the get trigger audio so the user knows they can speak
+				play_audio("sounds/get_trigger.mp3")
+				continue
+			except (ConnectionResetError, ConnectionAbortedError, ConnectionError):
+				# Connection error of some kind
+				speak("There appears to be an issue with your connection. Please check the connection and try again")
+				#Play the get trigger audio so the user knows they can speak
+				play_audio("sounds/get_trigger.mp3")
+				continue
 			except Exception as e:
-				print("Error transcribing audio: {0}".format(e))
+				speak("There was an error transcribing your audio. Please try again.")
+				#Play the get trigger audio so the user knows they can speak
+				play_audio("sounds/get_trigger.mp3")
 				continue
 		except KeyboardInterrupt:
 			await quit()
@@ -264,14 +275,13 @@ async def get_response(user_input: str) -> str:
 
 def process_response(response: str):
 	speak(response)
-	
 	return {
 		"question": is_question(response)
 	}
 
 async def quit():
 	print("exiting...")
-	if isinstance(bot, Bing):
+	if bot and isinstance(bot, Bing):
 		bot = None
 		await bing_bot.close()
 	sys.exit(0)

@@ -5,3 +5,4 @@ gtts
 openai-whisper
 SpeechRecognition
 edgegpt
+GoogleBard
